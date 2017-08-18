@@ -5,6 +5,7 @@ import (
 	builderT "github.com/hashicorp/packer/helper/builder/testing"
 	"fmt"
 	"github.com/hashicorp/packer/packer"
+	"github.com/vmware/govmomi/vim25/mo"
 )
 
 func TestBuilderAcc_basic(t *testing.T) {
@@ -26,7 +27,7 @@ const testBuilderAccBasic = `
 		"insecure_connection": true,
 
 		"template": "basic",
-		"vm_name": "test1",
+		"vm_name": "test-1",
 		"host": "esxi-1.vsphere55.test",
 
 		"ssh_username": "jetbrains",
@@ -59,6 +60,21 @@ func checkBasic() builderT.TestCheckFunc {
 
 		if vm.Name() != artifact.Name {
 			return fmt.Errorf("Invalid VM name: expected '%v', got '%v'", artifact.Name, vm.Name())
+		}
+
+		host, err := vm.HostSystem(conn.ctx)
+		if err != nil {
+			return err
+		}
+		var h mo.HostSystem
+		err = host.Properties(conn.ctx, host.Reference(), []string{"name"}, &h)
+		if err != nil {
+			return err
+		}
+
+		hostname := "esxi-1.vsphere55.test"
+		if h.Name != hostname {
+			return fmt.Errorf("Invalid host name: expected '%v', got '%v'", hostname, h.Name)
 		}
 
 		return nil
