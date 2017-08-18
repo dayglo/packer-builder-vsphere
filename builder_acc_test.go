@@ -6,13 +6,13 @@ import (
 	"fmt"
 	"github.com/hashicorp/packer/packer"
 	"github.com/vmware/govmomi/vim25/mo"
+	"encoding/json"
 )
 
 func TestBuilderAcc_basic(t *testing.T) {
 	builderT.Test(t, builderT.TestCase{
 		Builder:  &Builder{},
 		Template: testBuilderAccBasic,
-		Check: checkBasic(),
 	})
 }
 
@@ -36,7 +36,31 @@ const testBuilderAccBasic = `
 }
 `
 
-func checkBasic() builderT.TestCheckFunc {
+func TestBuilderAcc_default(t *testing.T) {
+	builderT.Test(t, builderT.TestCase{
+		Builder:  &Builder{},
+		Template: renderConfig(defaultConfig()),
+		Check:    checkDefault(),
+	})
+}
+
+func defaultConfig() map[string]interface{} {
+	return map[string]interface{}{
+		"vcenter_server":      "vcenter.vsphere55.test",
+		"username":            "root",
+		"password":            "jetbrains",
+		"insecure_connection": true,
+
+		"template": "basic",
+		"vm_name":  "test-1",
+		"host":     "esxi-1.vsphere55.test",
+
+		"ssh_username": "jetbrains",
+		"ssh_password": "jetbrains",
+	}
+}
+
+func checkDefault() builderT.TestCheckFunc {
 	return func(artifacts []packer.Artifact) error {
 		if len(artifacts) > 1 {
 			return fmt.Errorf("more than 1 artifact")
@@ -93,11 +117,28 @@ func checkBasic() builderT.TestCheckFunc {
 		return nil
 	}
 }
+
+func renderConfig(config map[string]interface{}) string {
+	t := map[string][]map[string]interface{}{
+		"builders": {
+			map[string]interface{}{
+				"type": "test",
+			},
+		},
+	}
+	for k, v := range config {
+		t["builders"][0][k] = v
+	}
+
+	j, _ := json.Marshal(t)
+	return string(j)
+}
+
 func testConn() (*Driver, error) {
 	config := &ConnectConfig{
-		VCenterServer: "vcenter.vsphere55.test",
-		Username: "root",
-		Password: "jetbrains",
+		VCenterServer:      "vcenter.vsphere55.test",
+		Username:           "root",
+		Password:           "jetbrains",
 		InsecureConnection: true,
 	}
 
