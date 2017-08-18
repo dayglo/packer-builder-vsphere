@@ -82,6 +82,12 @@ func checkDefault() builderT.TestCheckFunc {
 			return err
 		}
 
+		var v mo.VirtualMachine
+		err = vm.Properties(conn.ctx, vm.Reference(), []string{"layoutEx.disk"}, &v)
+		if err != nil {
+			return err
+		}
+
 		if vm.Name() != artifact.Name {
 			return fmt.Errorf("Invalid VM name: expected '%v', got '%v'", artifact.Name, vm.Name())
 		}
@@ -112,6 +118,10 @@ func checkDefault() builderT.TestCheckFunc {
 		}
 		if p.Owner != *p.Parent {
 			return fmt.Errorf("Not a root resource pool")
+		}
+
+		if len(v.LayoutEx.Disk[0].Chain) != 1 {
+			return fmt.Errorf("Not a full clone")
 		}
 
 		return nil
