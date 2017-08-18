@@ -77,6 +77,19 @@ func checkBasic() builderT.TestCheckFunc {
 			return fmt.Errorf("Invalid host name: expected '%v', got '%v'", hostname, h.Name)
 		}
 
+		pool, err := vm.ResourcePool(conn.ctx)
+		if err != nil {
+			return err
+		}
+		var p mo.ResourcePool
+		err = pool.Properties(conn.ctx, pool.Reference(), []string{"owner", "parent"}, &p)
+		if err != nil {
+			return err
+		}
+		if p.Owner != *p.Parent {
+			return fmt.Errorf("Not a root resource pool")
+		}
+
 		return nil
 	}
 }
