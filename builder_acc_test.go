@@ -120,6 +120,49 @@ func checkDefault(config map[string]interface{}) builderT.TestCheckFunc {
 	}
 }
 
+func TestBuilderAcc_linkedClone(t *testing.T) {
+	builderT.Test(t, builderT.TestCase{
+		Builder:  &Builder{},
+		Template: renderConfig(linkedCloneConfig()),
+		Check:    checkLinkedClone(),
+	})
+}
+
+func linkedCloneConfig() map[string]interface{} {
+	config := defaultConfig()
+	config["linked_clone"] = true
+	return config
+}
+
+func checkLinkedClone() builderT.TestCheckFunc {
+	return func(artifacts []packer.Artifact) error {
+		artifactRaw := artifacts[0]
+		artifact, _ := artifactRaw.(*Artifact)
+
+		conn, err := testConn()
+		if err != nil {
+			return err
+		}
+
+		vm, err := conn.finder.VirtualMachine(conn.ctx, artifact.Name)
+		if err != nil {
+			return err
+		}
+
+		var vmInfo mo.VirtualMachine
+		err = vm.Properties(conn.ctx, vm.Reference(), []string{"layoutEx.disk"}, &vmInfo)
+		if err != nil {
+			return err
+		}
+
+		if len(vmInfo.LayoutEx.Disk[0].Chain) != 3 {
+			return fmt.Errorf("Not a linked clone")
+		}
+
+		return nil
+	}
+}
+
 func renderConfig(config map[string]interface{}) string {
 	t := map[string][]map[string]interface{}{
 		"builders": {
