@@ -7,6 +7,7 @@ import (
 	"github.com/hashicorp/packer/packer"
 	"github.com/vmware/govmomi/vim25/mo"
 	"encoding/json"
+	"math/rand"
 )
 
 func TestBuilderAcc_basic(t *testing.T) {
@@ -37,83 +38,85 @@ const testBuilderAccBasic = `
 `
 
 func TestBuilderAcc_default(t *testing.T) {
+	config := defaultConfig()
 	builderT.Test(t, builderT.TestCase{
 		Builder:  &Builder{},
-		Template: renderConfig(defaultConfig()),
-		Check:    checkDefault(defaultConfig()),
+		Template: renderConfig(config),
+		Check:    checkDefault(t, config["vm_name"].(string), config["host"].(string)),
 	})
 }
 
 func defaultConfig() map[string]interface{} {
-	return map[string]interface{}{
+	config := map[string]interface{}{
 		"vcenter_server":      "vcenter.vsphere55.test",
 		"username":            "root",
 		"password":            "jetbrains",
 		"insecure_connection": true,
 
 		"template": "basic",
-		"vm_name":  "test-1",
 		"host":     "esxi-1.vsphere55.test",
 
 		"ssh_username": "jetbrains",
 		"ssh_password": "jetbrains",
 	}
+	config["vm_name"] = fmt.Sprintf("test-%v", rand.Intn(1000))
+	return config
 }
 
-func checkDefault(config map[string]interface{}) builderT.TestCheckFunc {
+func checkDefault(t *testing.T, name string, host string) builderT.TestCheckFunc {
 	return func(artifacts []packer.Artifact) error {
 		if len(artifacts) > 1 {
-			return fmt.Errorf("more than 1 artifact")
+			t.Fatal("more than 1 artifact")
 		}
 
 		artifactRaw := artifacts[0]
 		artifact, ok := artifactRaw.(*Artifact)
 		if !ok {
-			return fmt.Errorf("unknown artifact: %#v", artifactRaw)
+			t.Fatalf("unknown artifact: %#v", artifactRaw)
 		}
 
 		conn, err := testConn()
 		if err != nil {
-			return err
+			t.Fatal("Cannot connect: ", err)
 		}
 
 		vm, err := conn.finder.VirtualMachine(conn.ctx, artifact.Name)
 		if err != nil {
-			return err
+			t.Fatal("Cannot find VM: ", err)
 		}
 
 		var vmInfo mo.VirtualMachine
 		err = vm.Properties(conn.ctx, vm.Reference(), []string{"name", "runtime.host", "resourcePool", "layoutEx.disk"}, &vmInfo)
 		if err != nil {
-			return err
+			t.Fatalf("Cannot read VM properties: %v", err)
 		}
 
-		if vmInfo.Name != config["vm_name"] {
-			return fmt.Errorf("Invalid VM name: expected '%v', got '%v'", config["vm_name"], vmInfo.Name)
+		if vmInfo.Name != name {
+			t.Errorf("Invalid VM name: expected '%v', got '%v'", name, vmInfo.Name)
 		}
 
 		var hostInfo mo.HostSystem
 		err = vm.Properties(conn.ctx, vmInfo.Runtime.Host.Reference(), []string{"name"}, &hostInfo)
 		if err != nil {
-			return err
+			t.Fatal("Cannot read VM properties: ", err)
 		}
 
-		if hostInfo.Name != config["host"] {
-			return fmt.Errorf("Invalid host name: expected '%v', got '%v'", config["host"], hostInfo.Name)
+		if hostInfo.Name != host {
+			t.Errorf("Invalid host name: expected '%v', got '%v'", host, hostInfo.Name)
 		}
 
 		var rpInfo = mo.ResourcePool{}
 		err = vm.Properties(conn.ctx, vmInfo.ResourcePool.Reference(), []string{"owner", "parent"}, &rpInfo)
 		if err != nil {
-			return err
+			t.Fatalf("Cannot read resource pool properties: %v", err)
 		}
 
 		if rpInfo.Owner != *rpInfo.Parent {
-			return fmt.Errorf("Not a root resource pool")
+			t.Error("Not a root resource pool")
 		}
 
 		if len(vmInfo.LayoutEx.Disk[0].Chain) != 1 {
-			return fmt.Errorf("Not a full clone")
+			t.Error("Not a full clone")
 		}
 
 		return nil
@@ -124,7 +127,7 @@ func TestBuilderAcc_linkedClone(t *testing.T) {
 	builderT.Test(t, builderT.TestCase{
 		Builder:  &Builder{},
 		Template: linkedCloneConfig(),
-		Check:    checkLinkedClone(),
+		Check:    checkLinkedClone(t),
 	})
 }
 
@@ -134,29 +137,29 @@ func linkedCloneConfig() string {
 	return renderConfig(config)
 }
 
-func checkLinkedClone() builderT.TestCheckFunc {
+func checkLinkedClone(t *testing.T) builderT.TestCheckFunc {
 	return func(artifacts []packer.Artifact) error {
 		artifactRaw := artifacts[0]
 		artifact, _ := artifactRaw.(*Artifact)
 
 		conn, err := testConn()
 		if err != nil {
-			return err
+			t.Fatalf("Cannot connect: %v", err)
 		}
 
 		vm, err := conn.finder.VirtualMachine(conn.ctx, artifact.Name)
 		if err != nil {
-			return err
+			t.Fatalf("Cannot find VM: %v", err)
 		}
 
 		var vmInfo mo.VirtualMachine
 		err = vm.Properties(conn.ctx, vm.Reference(), []string{"layoutEx.disk"}, &vmInfo)
 		if err != nil {
-			return err
+			t.Fatalf("Cannot read VM properties: %v", err)
 		}
 
 		if len(vmInfo.LayoutEx.Disk[0].Chain) != 3 {
-			return fmt.Errorf("Not a linked clone")
+			t.Error("Not a linked clone")
 		}
 
 		return nil
