@@ -123,15 +123,15 @@ func checkDefault(config map[string]interface{}) builderT.TestCheckFunc {
 func TestBuilderAcc_linkedClone(t *testing.T) {
 	builderT.Test(t, builderT.TestCase{
 		Builder:  &Builder{},
-		Template: renderConfig(linkedCloneConfig()),
+		Template: linkedCloneConfig(),
 		Check:    checkLinkedClone(),
 	})
 }
 
-func linkedCloneConfig() map[string]interface{} {
+func linkedCloneConfig() string {
 	config := defaultConfig()
 	config["linked_clone"] = true
-	return config
+	return renderConfig(config)
 }
 
 func checkLinkedClone() builderT.TestCheckFunc {
